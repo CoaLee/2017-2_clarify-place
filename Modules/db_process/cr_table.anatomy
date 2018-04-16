@@ -1,0 +1,23 @@
+## {column(field) name},{mysql attribute},{position in a csv row(starts from 0}
+## lines starting with '#' are comments. will be ignored.
+session_id,VARCHAR(255),0
+date_text,VARCHAR(50),1
+action_type,VARCHAR(50),2
+url,VARCHAR(800),3
+#action_type2,VARCHAR(50),4
+#ssc?,VARCHAR(50),5
+#/rd?,VARCHAR(20),6
+#sx,INT,7
+#sy,INT,8
+#f,VARCHAR(20),9
+#px,INT,10
+#py,INT,11
+#i, ,12
+#cr,INT,13
+#p,VARCHAR(255),14
+#q,VARCHAR(255),15
+#r, ,16
+#s,VARCHAR(255),17
+#u, ,18
+#w,VARCHAR(20),19
+#time,VARCHAR(255),20

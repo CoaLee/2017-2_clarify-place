@@ -1,0 +1,4 @@
+*.png
+obsolete/
+__pycache__/
+

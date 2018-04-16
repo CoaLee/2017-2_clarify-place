@@ -1,0 +1,9 @@
+## {column(field) name},{mysql attribute},{position in a csv row(starts from 0}
+session_id,VARCHAR(255),0
+keyword,VARCHAR(40),1
+date_text,VARCHAR(50),2
+#ip_address,VARCHAR(16),3
+query,VARCHAR(600),4
+#device,VACHAR(30),5
+#os,VARCHAR(30),6
+#unknown2,VARCHAR(30),7

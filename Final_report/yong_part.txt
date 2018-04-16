@@ -1,0 +1,76 @@
+DB Implementation Spec
+
+1. DB Table Schema:
+[search_log]
+session_id: 세션 ID, 검색어 당 고유값
+keyword: 검색어
+date_text: 검색 일시
+ip_address: 사용자 IP
+query: 주소를 포함한 검색 쿼리
+device: 검색시 사용한 기기
+os: 검색시 운영체제
+------ 이상 데이터 추출 정보, 이하 액션로그 분석 후 추가하는 정보 ------
+otregion: '업체명으로 검색하기'버튼을 눌렀는지 여부(1 or null)
+lpa: 네이버가 명백한 업체명에 
+att: 네이버가 명백한 
+F_action: 사용자의 결과에 대한 반응(액션)을 바탕으로 계산한 값
+F_naver: 네이버에서 검색 결과를 어떻게 예측해서 내보냈는지 예상한 값
+coord_x: 경도. 검색시 위치 정보가 포함된 경우
+coord_y: 위도. 검색시 위치 정보가 포함된 때
+
+[action_log]
+session_id: 세션 ID, 검색어 당 고유값
+date_text: 검색 일시
+action_type: 액션의 종류
+res_ids: 액션이 flick일 경우 결과 화면에 나오는 링크들의 id(최대 3개)
+keyword: 검색어
+res_row: 액션이 flick일 경우 몇번째 링크 페이지인지
+url: 클릭을 비롯한 몇몇 액션들의 target url
+
+
+2. DB Modules
+1) mysql_interact.py
+[API Interaction]: 다른 모듈에서 데이터베이스에 접근해 빈번하게 사용하는 작업들을 추상화해 제공한다.
+int SELECT_CHOP_SIZE: 데이터가 클때 덩어리로 잘라서 받는 단위 크기
+dict chop_pos: 마지막으로 자른 위치를 기억하는 변수
+
+init_db_conn(): DB 연결 시작
+exit_db_conn(): DB 연결 종료
+add_column(str log_type, list name_and_attr): 칼럼 추가
+insert_data(str log_type, list data): 데이터 입력
+update_datum_where(str log_type, list list datum, str where): 데이터 업데이트. where은 sql 조건문이다.
+select_columns_where(str log_type, str list columns, str where, bool chopping): 데이터 조회. chopping을 True로 주게 되면 SELECT_CHOP_SIZE 갯수만큼 반환한다. 실행될 때마다 chop_pos를 이동시키며 다음 덩어리를 반환한다
+rewind_select(str log_type, int pos_mem): chop_pos를 특정 위치로 이동. 세션 매칭시 사용된다.
+next_id(str log_type): 다음에 입력될 id 반환. 테이블의 길이를 아는데 사용된다.
+
+
+[DB Initialization & Data Loading]
+str DB_NAME: DB 이름
+bool DIRECT_LOAD: True일 경우 아래 _direct_initial_table_setting()이 실행된다.
+bool MODE_BIG_DATA: True일 경우 로그 데이터 csv를 분할해 읽는다
+int LOAD_CHUNK_SIZE: 로그 데이터를 분할하는 크기
+
+_direct_initial_table_setting(): 파이썬 프로세스를 거치지 않고 로그 csv로부터 DB로 mysql이 직접 import하고 세션 아이디를 기준으로 정렬하도록 한다.
+_create_db(): DB 생성
+_drop_db(): DB 제거
+_create_table(str log_type, list list table_struct): 테이블 생성
+_drop_table(str log_type): 테이블 제거
+_extract_data_from_csvlog(str log_type, str csv_fname): 로그 csv로부터 데이터를 추출해 데이터베이스에 저장
+_extract_data_in_chunk(str log_type, str csv_fname, func* func_to_run): 데이터가 클 경우 분할해서 작업을 수행한다
+_create_foreign_key(str table_parent, str col_parent, str table_child, str col_child): (obsolete) 테이블 간에 종속 관계를 설정한다. 
+
+
+2) apply_policy.py
+[Execution Prep.]
+dict whole_store_ids: 네이버 업체명 검색결과를 크롤링하여 추출된, 검색어에 대해 업체명으로 분류된 결과들의 id 정보
+dict whole_flick_ids: 네이버 플레이스 검색결과를 크롤링하여 추출된, 최초 페이지를 포함해 flick할시 표시되는 결과들의 id 정보
+
+load_crawled_ids(str varname, str fname, str delim): 크롤링한 파일로부터 위 변수들의 정보를 읽어들인다
+execute_policies(): 검색로그와 액션로그로부터 단위 크기로 추출하여 같은 세션을 갖는 검색과 액션을 매칭한 뒤, 아래 함수들을 호출하여 그 결과를 데이터베이스에 업로드 한다
+find_coordinates(list search, list list actions): 액션 로그 중 위경도가 포함된 경우를 검출하여 이를 반환
+
+[Policy Execution]
+calculate_policies(list search, list list actions): policy들을 우선순위에 따라 호출하고 최종 F값을 반환한다
+policy_region_words(list search, list list actions): '맛집', '추천'과 같은 특정 단어가 포함될 경우 지역명을 검색한 의도로 판단하는 정책함수
+policy_store_actions(list search, list list actions): otregion('업체명으로 검색'을 누르면 기록되는 액션)과 같은 액션명이 검출될 경우 업체명을 검색한 의도로 판단하는 정책함수
+policy_flick_click(list search, list list actions): 검색 이후 사용자가 넘긴(flick) 검색 결과와 클릭(click)한 검색 결과의 갯수를 근거로 추정한 F값을 반환하는 정책함수
